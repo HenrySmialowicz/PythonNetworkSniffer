@@ -21,6 +21,7 @@ sudo python3 sniffer.py --ip 192.168.1.XX --proto icmp --data
 # Sniff TCP traffic
 
 sudo python3 sniffer.py --ip 192.168.1.XX --proto tcp
+
 Technical Implementation
 struct.unpack: Used to translate raw binary wire-data into Python variables using Network Byte Order (!).
 
