@@ -5,6 +5,7 @@ import socket
 import struct
 import sys
 import argparse
+import os
 
 parser = argparse.ArgumentParser(description='Network packet sniffer')
 parser.add_argument('--ip', help='IP address to sniff on', required=True)
@@ -41,10 +42,35 @@ class Packet:
             print(f'{e} No protocol for {self.pro}')
             self.protocol = str(self.pro)
 
+        def print_header_short(self):
+            print(
+                f'Protocol: {self.protocol} {self.src_addr} -> {self.dst_addr}')
 
-def sniff():
-    pass
+
+def sniff(host):
+    # Listen to ICMP
+    socket_protocol = socket.IPPROTO_ICMP
+
+    # Raw Socket allows for packet headers
+    sniffer = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket_protocol)
+
+    # Anchors sniffer to specific network
+    sniffer.bind(host, 0)
+
+    if os.name == 'nt':
+        sniffer.ioctl(socket.SIO_RCVALL, socket.RCVALL_ON)
+
+    # Self provided header
+    sniffer.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
+
+    try:
+        while True:
+            raw_data = sniffer.recv(65535)
+            packet = Packet(raw_data)
+            packet.print_header_short()
+    except KeyboardInterrupt:
+        sys.exit(1)
 
 
 if __name__ == '__main__':
-    sniff()
+    sniff(opts.ip)
