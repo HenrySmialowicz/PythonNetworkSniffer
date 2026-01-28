@@ -9,13 +9,16 @@ import os
 
 parser = argparse.ArgumentParser(description='Network packet sniffer')
 parser.add_argument('--ip', help='IP address to sniff on', required=True)
+parser.add_argument(
+    '--proto', help='Protocol to sniff (TCP/ICMP)', required=True)
+parser.add_argument('--data', help='Display Data', action='store_true')
 opts = parser.parse_args()
 
 
 class Packet:
     def __init__(self, data):
         self.packet = data
-        header = struct.unpack('<BBHHHBBH4s4s', self.packet[0:20])
+        header = struct.unpack('!BBHHHBBH4s4s', self.packet[0:20])
         self.ver = header[0] >> 4  # Version - First 4 bits
         self.ihl = header[0] & 0xF  # Header Length - Next 4 bits
         self.tos = header[1]  # Type of Service
@@ -33,7 +36,7 @@ class Packet:
         self.dst_addr = ipaddress.ip_address(self.dst)
 
         # Creates a map to label protocols
-        self.protocol_map = {1: "ICMP"}
+        self.protocol_map = {1: "ICMP", 6: "TCP"}
 
         # Error Handling for new protocols
         try:
@@ -42,20 +45,35 @@ class Packet:
             print(f'{e} No protocol for {self.pro}')
             self.protocol = str(self.pro)
 
-        def print_header_short(self):
-            print(
-                f'Protocol: {self.protocol} {self.src_addr} -> {self.dst_addr}')
+    def print_header_short(self):
+        print(
+            f'Protocol: {self.protocol} {self.src_addr} -> {self.dst_addr}')
+
+    def print_data(self):
+        data = self.packet[20:]
+        print('*'*10 + 'ASCII START' + '*'*10)
+        for b in data:
+            if b < 128:
+                print(chr(b), end='')
+            else:
+                print('.', end='')
+        print('*'*10 + 'ASCII END' + '*'*10)
 
 
 def sniff(host):
-    # Listen to ICMP
-    socket_protocol = socket.IPPROTO_ICMP
+
+    # Check Protocol
+    if opts.proto == 'tcp':
+        socket_protocol = socket.IPPROTO_TCP
+    else:
+        # Listen to ICMP
+        socket_protocol = socket.IPPROTO_ICMP
 
     # Raw Socket allows for packet headers
     sniffer = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket_protocol)
 
     # Anchors sniffer to specific network
-    sniffer.bind(host, 0)
+    sniffer.bind((host, 0))
 
     if os.name == 'nt':
         sniffer.ioctl(socket.SIO_RCVALL, socket.RCVALL_ON)
@@ -63,11 +81,15 @@ def sniff(host):
     # Self provided header
     sniffer.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
 
+    print(f"[*] Sniffer active on {host}. Waiting for {opts.proto.upper()}...")
+
     try:
         while True:
             raw_data = sniffer.recv(65535)
             packet = Packet(raw_data)
             packet.print_header_short()
+            if opts.data:
+                packet.print_data()
     except KeyboardInterrupt:
         sys.exit(1)
 
